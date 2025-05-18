@@ -108,11 +108,11 @@ app.post("/room", middleware, async (req, res) => {
 app.get("/chats/:roomId", async (req, res) => {
   const roomId = req.params.roomId;
   console.log("roomid:", roomId);
-
+  
   try {
-    const messages = await prismaClient.chats.findMany({
+    const messages = await prismaClient.chat.findMany({
       where: {
-        roomId: roomId
+        roomId: parseInt(roomId)
       },
       orderBy: {
         createdAt: "desc"
@@ -149,6 +149,6 @@ app.get("/room/:slug", async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
+app.listen(3001, () => {
   console.log("Server is running on port 3000");
 });
