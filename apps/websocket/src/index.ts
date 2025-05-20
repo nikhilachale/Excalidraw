@@ -93,7 +93,7 @@ wss.on('connection', function connection(ws: import('ws').WebSocket, request) {
     console.log("message received")
     console.log(parsedData);
 
-    if (parsedData.type === "chat") {
+  if (parsedData.type === "chat") {
       const roomId = parsedData.roomId;
       const message = parsedData.message;
 

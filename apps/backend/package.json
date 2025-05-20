@@ -12,8 +12,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    
     "@repo/typescript-config": "workspace:*",
+    "cors": "^2.8.5",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2"
   },
@@ -21,6 +21,7 @@
     "@repo/common": "workspace:*",
     "@repo/common-backend": "workspace:*",
     "@repo/db": "workspace:*",
+    "@types/cors": "^2.8.18",
     "@types/express": "^5.0.1",
     "@types/jsonwebtoken": "^9.0.9"
   }

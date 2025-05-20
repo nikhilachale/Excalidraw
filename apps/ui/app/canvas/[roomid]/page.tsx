@@ -1,12 +1,16 @@
+
 import RoomCanvas from "@/app/components/RoomCanvas";
 
-export default function CanvasPage({
-  params,
-}: {
-  params: { roomid: string };
-}) {
-  const roomid = params.roomid;
-  console.log("roomid: --", roomid);
+export default function CanvasPage(
+  {
+    params
+  }:{
+    params: { roomid: string };
+  }
+) {
 
-  return <RoomCanvas roomId={roomid} />;
+  const roomId = params.roomid;
+  console.log("roomid: --", roomId);
+ return <RoomCanvas roomId={roomId} />;
+  
 }
