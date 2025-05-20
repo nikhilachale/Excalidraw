@@ -225,13 +225,13 @@ export async function Draw(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElem
     };
     existingShapes.push(SHAPE);
 
-    socket.send(JSON.stringify({
-            type: "chat",
-            message: JSON.stringify({
-                SHAPE
-            }),
-            roomId
-        }))
+   socket.send(JSON.stringify({
+  type: "chat",
+  message: JSON.stringify({
+    shape: SHAPE
+  }),
+  roomId
+}))
 
     clearCanvas(existingShapes, ctx, canvas);
   });
@@ -279,9 +279,16 @@ export async function getExistingShapes(roomId: string) {
   const res = await axios.get(`${backend_url}/chats/${roomId}`);
   console.log("API response:", res.data); // Add this line
   const messages = res.data.messages || [];
-  const shapes = messages.map((x: { message: string }) => {
-    const messageData = JSON.parse(x.message);
-    return messageData.shape;
-  });
+  const shapes = messages
+    .map((x: { message: string }) => {
+      try {
+        const messageData = JSON.parse(x.message);
+        return messageData.shape;
+      } catch (err) {
+        console.error("Invalid message format:", x.message);
+        return null;
+      }
+    })
+    .filter((shape:any ): shape is Shape => shape !== null && shape !== undefined);
   return shapes;
 }
