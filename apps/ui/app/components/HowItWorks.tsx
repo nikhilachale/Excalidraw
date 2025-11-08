@@ -3,61 +3,58 @@ import { Play, Pencil, Users, Share2 } from 'lucide-react';
 
 const HowItWorks: React.FC = () => {
   return (
-    <section id="how-it-works" className="py-20">
-      <div className="container mx-auto px-4 md:px-6">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900">See Sketchy in action</h2>
-          <p className="mt-4 text-xl text-gray-600">
-            Watch how easy it is to create beautiful diagrams and collaborate in real-time.
-          </p>
+
+<section id="how-it-works" className="relative overflow-hidden bg-[#050915] py-24">
+  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#111a33]/70 via-transparent to-[#3C82F6]/10" />
+  <div className="relative mx-auto flex max-w-5xl flex-col gap-14 px-6 md:px-10">
+    <div className="text-center">
+      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.25em] text-[#86b7ff]">
+        Sketch together
+      </span>
+      <h2 className="mt-6 text-3xl font-semibold text-slate-100 md:text-4xl">
+        Flow through your ideas in three simple steps
+      </h2>
+      <p className="mt-4 text-base text-slate-400 md:text-lg">
+        Sketchy keeps your sessions light, fast, and effortlessly collaborative—no onboarding required.
+      </p>
+    </div>
+
+    <div className="grid gap-8 md:grid-cols-3">
+      {[
+        {
+          icon: Pencil,
+          title: "Draw freely",
+          description:
+            "Shape diagrams and wireframes with hand-drawn charm. Infinite canvas, zero friction.",
+        },
+        {
+          icon: Users,
+          title: "Collaborate live",
+          description:
+            "Invite teammates into the same canvas. Watch cursors move and ideas evolve together.",
+        },
+        {
+          icon: Share2,
+          title: "Share instantly",
+          description:
+            "Export snapshots, ship links, or reopen any room later. Your work stays synced and ready.",
+        },
+      ].map(({ icon: Icon, title, description }) => (
+        <div
+          key={title}
+          className="group relative flex flex-col gap-4 rounded-2xl border border-white/5 bg-[#0A0F1C]/60 p-6 shadow-[0_40px_80px_-48px_rgba(60,130,246,0.6)] transition hover:border-[#5BA8FF]/40"
+        >
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#3C82F6]/40 to-[#8B5CF6]/40 text-[#9dc4ff]">
+            <Icon className="h-5 w-5" />
+          </div>
+          <h3 className="text-xl font-semibold text-slate-50">{title}</h3>
+          <p className="text-sm text-slate-400">{description}</p>
         </div>
+      ))}
+    </div>
+  </div>
+</section>
 
-        <div className="relative rounded-2xl overflow-hidden shadow-2xl max-w-5xl mx-auto">
-          <img 
-            src="https://images.pexels.com/photos/3182812/pexels-photo-3182812.jpeg" 
-            alt="Sketchy Demo Preview" 
-            className="w-full h-auto"
-          />
-          <div className="absolute inset-0 bg-gray-900/30 flex items-center justify-center">
-            <button className="group bg-white/90 backdrop-blur-sm hover:bg-white p-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-110">
-              <Play className="h-12 w-12 text-blue-500 group-hover:text-blue-600 transition-colors" />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto flex items-center justify-center bg-blue-100 rounded-full mb-4">
-              <Pencil className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900">Draw Freely</h3>
-            <p className="mt-2 text-gray-600">
-              Use intuitive tools to sketch diagrams and ideas just like on paper — but better.
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto flex items-center justify-center bg-blue-100 rounded-full mb-4">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900">Collaborate in Real Time</h3>
-            <p className="mt-2 text-gray-600">
-              Work with your team live. Everyone stays in sync, no matter where they are.
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto flex items-center justify-center bg-blue-100 rounded-full mb-4">
-              <Share2 className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900">Share Instantly</h3>
-            <p className="mt-2 text-gray-600">
-              Export your work or share a live link in seconds — it’s that simple.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 };
 

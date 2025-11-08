@@ -20,3 +20,9 @@ export async function getExistingShapes(roomId: string) {
     .filter((shape:any ): shape is Shape => shape !== null && shape !== undefined);
   return shapes;
 }
+
+export async function cleanCanvas(roomId: string) {
+  await axios.post(`${backend_url}/chats/${roomId}/clear`, {
+
+  });
+}

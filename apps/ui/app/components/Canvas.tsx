@@ -5,7 +5,7 @@ import { Circle, Pencil, RectangleHorizontalIcon } from "lucide-react";
 import { Game } from "@/draw/Game";
 import { IconButton } from "./IconButton";
 export type Tool = "circle" | "rect" | "line";
-
+import { cleanCanvas } from "@/draw/http";
 export function Canvas({
   roomId,
   socket
@@ -30,6 +30,7 @@ export function Canvas({
       const g = new Game(canvas, roomId, socket);
       setGame(g);
 
+     
       return () => g.destroy();
     }
   }, []);
@@ -41,21 +42,37 @@ export function Canvas({
         ref={canvasRef}
         style={{ width: "100vw", height: "100vh", display: "block" }}
       ></canvas>
-      <Topbar selectedTool={selectedTool} setSelectedTool={setSelectedTool} />
+      <Topbar selectedTool={selectedTool} setSelectedTool={setSelectedTool} socket={socket} roomId={roomId} game={game} />
     </div>
   );
 }
 
-function Topbar({ selectedTool, setSelectedTool }: {
+function Topbar({ selectedTool, setSelectedTool, socket, roomId, game }: {
   selectedTool: Tool,
-  setSelectedTool: (s: Tool) => void
+  setSelectedTool: (s: Tool) => void,
+  socket: WebSocket,
+  roomId: string,
+  game?: Game
 }) {
+  const handleClear = async () => {
+    try {
+      await cleanCanvas(roomId);
+      socket.send(JSON.stringify({ type: "clear", roomId }));
+      // Clear local shapes immediately using Game public API
+      if (game) {
+        game.clearCanvas();
+      }
+    } catch (error) {
+      console.error("Failed to clear canvas:", error);
+    }
+  };
+
   return <div style={{
     position: "fixed",
     top: 10,
     left: 10
   }}>
-    <div className="flex gap-t">
+    <div className="flex gap-2">
       <IconButton
         onClick={() => {
           setSelectedTool("line");
@@ -65,10 +82,12 @@ function Topbar({ selectedTool, setSelectedTool }: {
       />
       <IconButton onClick={() => {
         setSelectedTool("rect");
-      }} activated={selectedTool === "rect"} icon={<RectangleHorizontalIcon />} ></IconButton>
+      }} activated={selectedTool === "rect"} icon={<RectangleHorizontalIcon />} />
       <IconButton onClick={() => {
         setSelectedTool("circle");
-      }} activated={selectedTool === "circle"} icon={<Circle />}></IconButton>
+      }} activated={selectedTool === "circle"} icon={<Circle />} />
+
+      <button onClick={handleClear}>Clear</button>
     </div>
   </div>
 }

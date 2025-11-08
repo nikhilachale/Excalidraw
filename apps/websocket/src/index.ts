@@ -1,124 +1,127 @@
-import { WebSocketServer } from 'ws';
-import jwt from 'jsonwebtoken'
-const wss = new WebSocketServer({ port: 8080 });
-
-import {JWT_SECRET} from "@repo/common-backend/config";
-
-import { prismaClient } from "@repo/db/client";
+import { WebSocketServer, WebSocket } from 'ws';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '@repo/common-backend/config';
+import { prismaClient } from '@repo/db/client';
 
 interface User {
-  ws: import('ws').WebSocket,
-  rooms: string[],
-  userId: string
+  ws: WebSocket;
+  userId: string;
 }
 
-const users:User[]=[]
+interface Room {
+  id: string;
+  members: Set<User>;
+}
 
-function checkUser(token: string): string | null {
+const wss = new WebSocketServer({ port: 8080 });
+const users = new Map<WebSocket, User>();
+const rooms = new Map<string, Room>();
+
+// background queue for async writes
+const chatQueue: { roomId: number; message: string; userId: string }[] = [];
+
+function verifyToken(token: string): string | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    if (typeof decoded == "string") {
-      return null;
-    }
-
-    if (!decoded || !decoded.userId) {
-      return null;
-    }
-
-    return decoded.userId;
-  } catch(e) {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string };
+    return decoded?.userId ?? null;
+  } catch {
     return null;
   }
- 
 }
 
+function send(ws: WebSocket, data: any) {
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+}
 
-
-
-
-wss.on('connection', function connection(ws: import('ws').WebSocket, request) {
- 
-  console.log("new connection ");
-
-  const url=request.url;
-  if(!url)
-  {
-    ws.close();
-    return;
-
-  } 
-  const queryParams = new URLSearchParams(url.split('?')[1]);
-  const token = queryParams.get('token') || "";
-  const userId = checkUser(token);
-  console.log("userId", userId)
-
-
-  if (userId == null) {
-    ws.close()
-    return null;
+async function processChatQueue() {
+  if (chatQueue.length === 0) return;
+  const batch = chatQueue.splice(0, chatQueue.length);
+  try {
+    await prismaClient.chat.createMany({ data: batch });
+  } catch (e) {
+    console.error("DB write failed:", e);
   }
+}
 
-  users.push({
-    userId,
-    rooms: [],
-    ws
-  })
+// background writer runs every 100ms
+setInterval(processChatQueue, 100);
 
+wss.on('connection', (ws, request) => {
+  const url = request.url;
+  if (!url) return ws.close();
 
-   ws.on('message', async function message(data)
-   {
+  const token = new URLSearchParams(url.split('?')[1]).get('token') || '';
+  const userId = verifyToken(token);
+  if (!userId) return ws.close();
 
-    let parsedData;
-    if (typeof data !== "string") {
-      parsedData = JSON.parse(data.toString());
-    } else {
-      parsedData = JSON.parse(data); // {type: "join-room", roomId: 1}
+  console.log(`✅ Connected: ${userId}`);
+  users.set(ws, { ws, userId });
+
+  ws.on('message', (rawData) => {
+    let data: any;
+    try {
+      data = JSON.parse(rawData.toString());
+    } catch {
+      return send(ws, { type: 'error', message: 'Invalid JSON' });
     }
 
-   
-    if (parsedData.type === "join_room") {
-      const user = users.find(x => x.ws === ws);
-      user?.rooms.push(parsedData.roomId);
-    }
+    const { type, roomId, message } = data;
+    const user = users.get(ws);
+    if (!user) return;
 
-    if (parsedData.type === "leave_room") {
-      const user = users.find(x => x.ws === ws);
-      if (!user) {
-        return;
+    switch (type) {
+      case 'join_room': {
+        if (!roomId) return;
+        if (!rooms.has(roomId)) rooms.set(roomId, { id: roomId, members: new Set() });
+        rooms.get(roomId)!.members.add(user);
+        break;
       }
-      user.rooms = user?.rooms.filter(x => x === parsedData.room);
-    }
 
-    console.log("message received")
-    console.log(parsedData);
+      case 'leave_room': {
+        rooms.get(roomId)?.members.delete(user);
+        break;
+      }
 
-  if (parsedData.type === "chat") {
-      const roomId = parsedData.roomId;
-      const message = parsedData.message;
-      console.log("userId", userId);
-       console.log("roomid", roomId);
-      console.log("message", message);
+      case 'chat': {
+        if (!roomId || !message) return;
 
-      await prismaClient.chat.create({
-        data: {
-          roomId: Number(roomId),
-          message,
-          userId
+        // 1️⃣ broadcast immediately (low latency)
+        const room = rooms.get(roomId);
+        if (room) {
+          const payload = JSON.stringify({ type: 'chat', message, roomId, sender: user.userId });
+          for (const member of room.members) {
+            if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
+          }
         }
-      });
 
-      users.forEach(user => {
-        if (user.rooms.includes(roomId)) {
-          user.ws.send(JSON.stringify({
-            type: "chat",
-            message: message,
-            roomId
-          }))
+        // 2️⃣ save asynchronously
+        chatQueue.push({ roomId: Number(roomId), message, userId: user.userId });
+
+        break;
+      }
+
+      case 'clear': {
+        if (!roomId) return;
+        const room = rooms.get(roomId);
+        if (room) {
+          const payload = JSON.stringify({ type: 'clear', roomId, sender: user.userId });
+          for (const member of room.members) {
+            if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
+          }
         }
-      })
-    }
+        break;
+        
+      }
 
+      default:
+        send(ws, { type: 'error', message: 'Unknown event type' });
+    }
   });
 
+  ws.on('close', () => {
+    const user = users.get(ws);
+    if (!user) return;
+    users.delete(ws);
+    for (const room of rooms.values()) room.members.delete(user);
+  });
 });

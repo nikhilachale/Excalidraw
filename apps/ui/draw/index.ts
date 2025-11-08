@@ -155,7 +155,9 @@ export async function Draw(canvas: HTMLCanvasElement, roomId: string, socket: We
     }
   })
 }
-function clearCanvas(
+
+
+export function clearCanvas(
   existingShapes: Shape[],
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement
