@@ -1,47 +1,38 @@
+"use client";
 
+import { useState, useEffect } from "react";
+import { backend_url } from "../../config";
 import axios from "axios";
-import { useEffect, useState } from "react";
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
-
-export interface UserInfo {
-  id: string | number;
-  name: string;
-  email: string;
-}
-
-export const useinfo = () => {
+export function useInfo() {
   const [loading, setLoading] = useState(true);
-  const [info, setInfo] = useState<UserInfo | null>(null);
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const [info, setInfo] = useState<{ id: string; name: string; email: string } | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    if (!token) {
-      setLoading(false);
-      return;
+    async function getUserInfo() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${backend_url}/userinfo`, {
+          headers: {
+            Authorization: token,
+          },
+        });
+        setInfo(response.data.user);
+      } catch (error) {
+        console.error("Failed to fetch user info:", error);
+        localStorage.removeItem("token");
+      } finally {
+        setLoading(false);
+      }
     }
 
-    axios
-      .get(`${BACKEND}/userinfo`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => {
-        if (!mounted) return;
-        setInfo(res.data?.user || null);
-      })
-      .catch((err) => {
-        console.error("Error fetching user info:", err?.response?.data || err.message);
-        setInfo(null);
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [token]);
+    getUserInfo();
+  }, []);
 
   return { loading, info };
-};
+}

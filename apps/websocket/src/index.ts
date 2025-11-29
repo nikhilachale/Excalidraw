@@ -12,8 +12,11 @@ interface Room {
   id: string;
   members: Set<User>;
 }
+const PORT = Number(process.env.PORT) || 8080;
+const wss = new WebSocketServer({ port: PORT });
+console.log(`WebSocket server listening on port ${PORT}`);
 
-const wss = new WebSocketServer({ port: 8080 });
+
 const users = new Map<WebSocket, User>();
 const rooms = new Map<string, Room>();
 
@@ -50,7 +53,10 @@ wss.on('connection', (ws, request) => {
   const url = request.url;
   if (!url) return ws.close();
 
-  const token = new URLSearchParams(url.split('?')[1]).get('token') || '';
+  const urlParts = url.split('?');
+  if (urlParts.length < 2) return ws.close();
+  
+  const token = new URLSearchParams(urlParts[1]).get('token') || '';
   const userId = verifyToken(token);
   if (!userId) return ws.close();
 

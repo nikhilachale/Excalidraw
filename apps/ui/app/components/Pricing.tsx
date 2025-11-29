@@ -62,7 +62,7 @@ const Pricing: React.FC = () => {
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Simple, transparent pricing</h2>
           <p className="mt-4 text-xl text-gray-600">
-            Choose the plan that's right for you and start creating beautiful diagrams today.
+            Choose the plan thats right for you and start creating beautiful diagrams today.
           </p>
         </div>
 

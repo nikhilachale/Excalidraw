@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 const Hero: React.FC = () => {
@@ -23,11 +24,23 @@ const Hero: React.FC = () => {
           <p className="mt-6 text-lg text-slate-300 md:text-xl">
             Sketchy is the virtual whiteboard built for teams who think with their
             hands. Sketch with a hand-drawn vibe, sync instantly, and keep everyone
-            aligned—whether they’re across the table or across the globe.
+            aligned—whether they&apos;re across the table or across the globe.
           </p>
 
           <div className="mt-10 flex flex-col gap-4 sm:flex-row">
-            <button className="rounded-xl bg-gradient-to-r from-[#3C82F6] to-[#8B5CF6] px-8 py-3 text-sm font-medium text-white shadow-[0_20px_40px_-24px_rgba(60,130,246,0.7)] transition hover:opacity-90">
+            <button 
+              onClick={() => {
+                const token = localStorage.getItem("token");
+                if (token) {
+                  // User is signed in, redirect to canvas creation
+                  window.location.href = "/#rooms";
+                } else {
+                  // User not signed in, redirect to signup
+                  window.location.href = "/signup";
+                }
+              }}
+              className="rounded-xl bg-gradient-to-r from-[#3C82F6] to-[#8B5CF6] px-8 py-3 text-sm font-medium text-white shadow-[0_20px_40px_-24px_rgba(60,130,246,0.7)] transition hover:opacity-90"
+            >
               Start drawing now
             </button>
             <a
@@ -59,10 +72,12 @@ const Hero: React.FC = () => {
         <div className="relative md:w-1/2">
           <div className="absolute inset-0 -translate-x-10 rounded-3xl bg-gradient-to-br from-[#3C82F6]/30 to-transparent blur-2xl" />
           <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0F172A]/60 shadow-2xl shadow-[#3C82F6]/20">
-            <img
-              src="https://images.pexels.com/photos/1181268/pexels-photo-1181268.jpeg"
+            <Image
+              src="/hero.png"
               alt="Sketchy live canvas preview"
-              className="w-full"
+              width={600}
+              height={400}
+              className="w-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0A0F1C]/80 via-transparent to-transparent" />
             <div className="absolute bottom-4 left-4 rounded-xl bg-black/50 px-4 py-3 text-sm text-slate-200 backdrop-blur">

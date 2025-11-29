@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pencil, Users, Share2 } from 'lucide-react';
+import { Pencil, Users, Share2 } from 'lucide-react';
 
 const HowItWorks: React.FC = () => {
   return (

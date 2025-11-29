@@ -1,22 +1,13 @@
 
 "use client";
 import React, { useEffect, useState } from "react";
-import { Menu, X, PenLine } from "lucide-react";
 import Link from "next/link";
-import { useinfo } from "../hooks/useinfo";
+import { useInfo } from "../hooks/useinfo";
 
 const Header: React.FC = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [userInitial, setUserInitial] = useState("");
 
-  const { loading: infoLoading, info } = useinfo();
-
-  useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const { loading: infoLoading, info } = useInfo();
 
   // immediate localStorage read for instant UX
   useEffect(() => {
@@ -33,87 +24,65 @@ const Header: React.FC = () => {
     }
   }, [infoLoading, info]);
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("name");
+    setUserInitial("");
+    window.location.href = "/";
+  };
+
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? "bg-white/70 shadow-md py-3" : "bg-transparent py-6"
-      }`}
-    >
-      <div className="container mx-auto px-4 md:px-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <PenLine className="h-8 w-8 text-blue-500" />
-            <span className="ml-2 text-xl font-bold text-gray-900">Sketchy</span>
-          </div>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex space-x-8">
-            <a href="#features" className="text-gray-900 hover:text-blue-500 transition-colors">
-              Features
-            </a>
-            <a href="#how-it-works" className="text-gray-900 hover:text-blue-500 transition-colors">
-              How It Works
-            </a>
-            <a href="#pricing" className="text-gray-900 hover:text-blue-500 transition-colors">
-              Pricing
-            </a>
-            <a href="#faq" className="text-gray-900 hover:text-blue-500 transition-colors">
-              FAQ
-            </a>
-          </nav>
-
-          <div className="hidden md:flex space-x-4">
-            {userInitial ? (
-              <div
-                className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-500 text-white font-semibold"
-                title={localStorage.getItem("name") || ""}
-              >
+    <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/" className="text-lg font-semibold text-white">
+          Sketchy
+        </Link>
+        <nav className="hidden items-center gap-8 text-sm text-slate-300 md:flex">
+          <a href="#features" className="hover:text-white">
+            Features
+          </a>
+          <a href="#how-it-works" className="hover:text-white">
+            How it works
+          </a>
+          <a href="#pricing" className="hover:text-white">
+            Pricing
+          </a>
+          <a href="#faq" className="hover:text-white">
+            FAQ
+          </a>
+        </nav>
+        <div className="flex items-center gap-3">
+          {userInitial ? (
+            <div className="relative group">
+              <div className="h-9 w-9 flex items-center justify-center rounded-full bg-gradient-to-r from-[#3C82F6] to-[#8B5CF6] text-white font-semibold cursor-pointer">
                 {userInitial}
               </div>
-            ) : (
-              <Link href="/signin">
-                <button className="px-4 py-2 text-gray-600 hover:text-blue-600 transition-colors">Log in</button>
-              </Link>
-            )}
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button className="md:hidden text-gray-600" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
-        </div>
-
-        {/* Mobile Navigation */}
-        {isMenuOpen && (
-          <div className="md:hidden pt-4 pb-2">
-            <nav className="flex flex-col space-y-4">
-              <a href="#features" className="text-gray-600 hover:text-blue-500 transition-colors py-2" onClick={() => setIsMenuOpen(false)}>
-                Features
-              </a>
-              <a href="#how-it-works" className="text-gray-600 hover:text-blue-500 transition-colors py-2" onClick={() => setIsMenuOpen(false)}>
-                How It Works
-              </a>
-              <a href="#pricing" className="text-gray-600 hover:text-blue-500 transition-colors py-2" onClick={() => setIsMenuOpen(false)}>
-                Pricing
-              </a>
-              <a href="#faq" className="text-gray-600 hover:text-blue-500 transition-colors py-2" onClick={() => setIsMenuOpen(false)}>
-                FAQ
-              </a>
-
-              <div className="flex flex-col space-y-2 pt-2">
-                {userInitial ? (
-                  <div className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-500 text-white font-semibold">
-                    {userInitial}
-                  </div>
-                ) : (
-                  <Link href="/signin">
-                    <button className="px-4 py-2 text-gray-600 hover:text-blue-600 transition-colors text-left">Log in</button>
-                  </Link>
-                )}
+              <div className="absolute right-0 top-full mt-2 w-32 rounded-lg bg-slate-800 border border-slate-700 p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-2 py-1 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded"
+                >
+                  Logout
+                </button>
               </div>
-            </nav>
-          </div>
-        )}
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/signin"
+                className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-white"
+              >
+                Create account
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

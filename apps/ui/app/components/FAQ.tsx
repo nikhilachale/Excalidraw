@@ -42,7 +42,7 @@ const FAQ: React.FC = () => {
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Frequently asked questions</h2>
           <p className="mt-4 text-xl text-gray-600">
-            Everything you need to know about Sketchy. Can't find the answer you're looking for? 
+            Everything you need to know about Sketchy. Cant find the answer you are looking for? 
             <a href="#contact" className="text-blue-500 hover:text-blue-600 ml-1">Contact us</a>.
           </p>
         </div>

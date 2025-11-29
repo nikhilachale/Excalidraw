@@ -50,10 +50,15 @@ export default function Home() {
     const token = localStorage.getItem("token");
     if (!token) {
       setStatus("Please sign in to create a room.");
+      setTimeout(() => {
+        window.location.href = "/signin";
+      }, 1500);
       return;
     }
+
     setLoading(true);
     setStatus(null);
+
     try {
       const response = await fetch(`${backend_url}/room`, {
         method: "POST",
@@ -63,11 +68,40 @@ export default function Home() {
         },
         body: JSON.stringify({ name }),
       });
-      const result = await response.json();
-      if (!response.ok || !result?.roomId) {
-        throw new Error(result?.message ?? "Unable to create room");
+
+      // try to parse JSON safely (avoid `any` and unused catch vars to satisfy ESLint)
+      let result: unknown = null;
+      try {
+        result = await response.json();
+      } catch {
+        // Non-JSON response (ignore)
       }
-      router.push(`/canvas/${result.roomId}`);
+
+      // Normalize parsed result into a typed shape we can safely inspect
+      const parsed = (result as Record<string, unknown> | null) ?? null;
+
+      if (!response.ok) {
+        // prefer backend-provided message if present and a string
+        const msg = parsed && typeof parsed['message'] === 'string'
+          ? (parsed['message'] as string)
+          : `Server responded ${response.status}`;
+        throw new Error(msg);
+      }
+
+      // backend may respond with different shapes; attempt safe extraction
+      const data = parsed && (parsed['data'] as Record<string, unknown> | undefined);
+      const roomId = parsed && (
+        parsed['roomId'] ??
+        (data && (data['roomId'] ?? data['id'])) ??
+        parsed['id']
+      );
+
+      if (!roomId) {
+        const errMsg = parsed && typeof parsed['message'] === 'string' ? (parsed['message'] as string) : "Unable to create room";
+        throw new Error(errMsg);
+      }
+
+      router.push(`/canvas/${String(roomId)}`);
     } catch (error) {
       setStatus((error as Error).message);
     } finally {
@@ -105,6 +139,14 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => {
+                      const token = localStorage.getItem("token");
+                      if (!token) {
+                        setStatus("Please sign in to create a room.");
+                        setTimeout(() => {
+                          window.location.href = "/signin";
+                        }, 1500);
+                        return;
+                      }
                       setStatus(null);
                       setRoomName("");
                       setIsCreateOpen(true);
@@ -146,26 +188,32 @@ export default function Home() {
 
             <form
               className="mt-6 space-y-4"
-              onSubmit={(event) => {
+              onSubmit={async (event) => {
                 event.preventDefault();
                 if (isJoinOpen) {
                   if (!joinSlug.trim()) {
                     setStatus("Enter a room slug.");
                     return;
                   }
-                  joinRoom(joinSlug.trim()).then(() => {
+                  try {
+                    await joinRoom(joinSlug.trim());
                     setIsJoinOpen(false);
                     setJoinSlug("");
-                  });
+                  } catch {
+                    // Error is already handled in joinRoom
+                  }
                 } else {
                   if (!roomName.trim()) {
                     setStatus("Enter a room name.");
                     return;
                   }
-                  createRoom(roomName.trim()).then(() => {
+                  try {
+                    await createRoom(roomName.trim());
                     setIsCreateOpen(false);
                     setRoomName("");
-                  });
+                  } catch {
+                    // Error is already handled in createRoom
+                  }
                 }
               }}
             >

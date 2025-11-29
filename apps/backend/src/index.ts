@@ -1,21 +1,43 @@
-// /Users/nikhilachale/Desktop/excalidraw/excalidraw/apps/backend/src/index.ts
 import express from "express";
 import { prismaClient } from "@repo/db/client";
 import { CreateUserSchema, SigninSchema, CreateRoomSchema } from "@repo/common/types";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from '@repo/common-backend/config';
 import { middleware } from "./middleware";
-import cors from "cors";
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
 const app = express();
 app.use(express.json());
-app.use(
-  cors({
-    origin: "http://localhost:4002",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// CORS configuration: allow only trusted origins and support preflight
+const allowedOrigins = [
+  'http://localhost:4002',
+  'https://canvas-ui.onrender.com'
+];
+
+const corsMiddleware: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin as string | undefined;
+  if (!origin) {
+    next();
+    return;
+  } // allow non-browser requests
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+    return;
+  }
+  // disallow other origins
+  res.status(403).json({ message: 'CORS policy: Origin not allowed' });
+  return;
+};
+
+app.use(corsMiddleware);
 
 app.post("/signup", async (req, res) => {
   const parsedData = CreateUserSchema.safeParse(req.body);
@@ -28,6 +50,8 @@ app.post("/signup", async (req, res) => {
   }
 
   const data = parsedData.data;
+
+  console.log("Creating user with data:", data);
   try {
     const user = await prismaClient.user.create({
       data: {
@@ -36,9 +60,22 @@ app.post("/signup", async (req, res) => {
         password: data.password,
       },
     });
+    
+    // Generate token for immediate login after signup
+    const token = jwt.sign(
+      {
+        userId: user.id,
+      },
+      JWT_SECRET
+    );
+    
     res.json({
       userId: user.id,
+      token,
     });
+
+    console.log("User created with ID:", user.id);
+    console.log("User created with token:", token);
   } catch (e) {
     console.log("error in creating user: ", e);
     res.status(500).json({ message: "error in creating user" });

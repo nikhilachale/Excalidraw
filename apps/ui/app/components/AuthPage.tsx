@@ -1,11 +1,12 @@
-
 "use client";
 import React, { useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 
+// const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://canvas-be-m6vl.onrender.com";
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
+console.log("Using BACKEND URL:", BACKEND);
 export function AuthPage({ isSignin }: { isSignin: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +34,14 @@ export function AuthPage({ isSignin }: { isSignin: boolean }) {
         });
 
         const data = res.data;
-        // backend returns userId on success (no token) — still store first name so header updates
+        console.log("Signup response data:", data);
+
+        // Store token if provided by signup endpoint
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+        }
+
+        // Store first name for header display
         localStorage.setItem("name", nameToSend);
         alert("Sign-up successful");
         window.location.href = "/";
@@ -46,19 +54,23 @@ export function AuthPage({ isSignin }: { isSignin: boolean }) {
         password,
       });
       const data = res.data;
+      console.log("Signin response data:", data);
 
       if (data.token) {
         localStorage.setItem("token", data.token);
 
+
         // fetch userinfo to get canonical name and store first name only
         try {
           const userRes = await axios.get(`${BACKEND}/userinfo`, {
-            headers: { Authorization: `Bearer ${data.token}` },
+            headers: { Authorization: data.token },
           });
           const fullName: string = userRes.data?.user?.name || "";
           const firstName = fullName ? fullName.split(" ")[0] : email.split("@")[0];
           localStorage.setItem("name", toCapitalized(firstName));
-        } catch (e) {
+        } 
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        catch (e) {
           // fallback to email prefix if userinfo fails
           const fallback = toCapitalized(email.split("@")[0].split(".")[0]);
           localStorage.setItem("name", fallback);
@@ -70,7 +82,8 @@ export function AuthPage({ isSignin }: { isSignin: boolean }) {
       }
 
       alert(res.data?.message || "Authentication failed");
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
       alert(err?.response?.data?.message || err.message || "Auth failed");
     } finally {
       setLoading(false);
@@ -78,53 +91,88 @@ export function AuthPage({ isSignin }: { isSignin: boolean }) {
   };
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-gray-100">
-      <div className="flex flex-col items-center justify-center p-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-blue-500 mb-4">
-          {isSignin ? "Sign In" : "Sign Up"}
-        </h1>
+    <div className="min-h-screen bg-gradient-to-br from-[#0A0F1C] via-[#111a33] to-[#050915] flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <div className="relative">
+          {/* Background glow */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-[#3C82F6] via-[#8B5CF6] to-[#F472B6] rounded-2xl blur opacity-75"></div>
+          
+          {/* Card */}
+          <div className="relative bg-[#0C1326]/95 backdrop-blur border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-semibold text-white mb-2">
+                {isSignin ? "Welcome back" : "Join Sketchy"}
+              </h1>
+              <p className="text-slate-400 text-sm">
+                {isSignin 
+                  ? "Sign in to continue drawing with your team" 
+                  : "Create your account and start sketching together"
+                }
+              </p>
+            </div>
 
-        <input
-          type="email"
-          placeholder="Email"
-          className="w-72 p-3 text-neutral-400 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleAuth(); }}>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Email address
+                </label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:border-[#5BA8FF]/40 focus:ring-2 focus:ring-[#5BA8FF]/20 focus:outline-none transition-all"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
 
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-72 p-3 mb-6 border text-neutral-400 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-slate-400 focus:border-[#5BA8FF]/40 focus:ring-2 focus:ring-[#5BA8FF]/20 focus:outline-none transition-all"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
 
-        <button
-          className="w-72 p-3 bg-black text-white rounded-md hover:bg-gray-800 transition duration-300 disabled:opacity-60"
-          onClick={handleAuth}
-          disabled={loading}
-        >
-          {isSignin ? (loading ? "Signing in..." : "Sign In") : loading ? "Signing up..." : "Sign Up"}
-        </button>
+              <button
+                type="submit"
+                className="w-full py-3 bg-gradient-to-r from-[#3C82F6] to-[#8B5CF6] text-white font-medium rounded-xl shadow-[0_20px_40px_-24px_rgba(60,130,246,0.7)] hover:opacity-90 focus:ring-2 focus:ring-[#5BA8FF]/50 focus:outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={loading}
+              >
+                {isSignin 
+                  ? (loading ? "Signing in..." : "Sign in") 
+                  : (loading ? "Creating account..." : "Create account")
+                }
+              </button>
+            </form>
 
-        <p className="mt-4 text-sm text-gray-600">
-          {isSignin ? (
-            <>
-              Don't have an account?{" "}
-              <Link href="/signup" className="text-blue-500 hover:underline">
-                Sign Up
-              </Link>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <Link href="/signin" className="text-blue-500 hover:underline">
-                Sign In
-              </Link>
-            </>
-          )}
-        </p>
+            <div className="mt-8 text-center">
+              <p className="text-sm text-slate-400">
+                {isSignin ? (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <Link href="/signup" className="text-[#5BA8FF] hover:text-[#9dc4ff] transition-colors font-medium">
+                      Sign up
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <Link href="/signin" className="text-[#5BA8FF] hover:text-[#9dc4ff] transition-colors font-medium">
+                      Sign in
+                    </Link>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
