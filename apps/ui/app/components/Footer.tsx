@@ -1,76 +1,55 @@
 import React from 'react';
-import { PenLine, Twitter, Github as GitHub, Linkedin, Mail } from 'lucide-react';
+import { PenLine,  Mail } from 'lucide-react';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-gray-900 text-gray-300 pt-16 pb-8">
-      <div className="container mx-auto px-4 md:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16">
-          <div>
-            <div className="flex items-center mb-6">
-              <PenLine className="h-8 w-8 text-blue-400" />
-              <span className="ml-2 text-xl font-bold text-white">Sketchy</span>
+    <footer className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
+      {/* Background pattern */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.05)_1px,transparent_0)] bg-[size:40px_40px] pointer-events-none" />
+      
+      <div className="relative container mx-auto px-6 py-16">
+        {/* Main content */}
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-12 mb-16">
+          {/* Brand section */}
+          <div className="text-center lg:text-left max-w-md">
+            <div className="flex items-center justify-center lg:justify-start mb-6">
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-400 rounded-lg blur-lg opacity-30"></div>
+                <div className="relative bg-black/20 backdrop-blur-sm border border-blue-400/20 rounded-lg p-3">
+                  <PenLine className="h-8 w-8 text-blue-400" />
+                </div>
+              </div>
+              <span className="ml-4 text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Sketchy
+              </span>
             </div>
-            <p className="text-gray-400 mb-6">
+            <p className="text-slate-300 text-lg leading-relaxed">
               Beautiful diagrams with a hand-drawn feel. Collaborate in real-time with your team.
             </p>
-            <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <GitHub className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <Linkedin className="h-5 w-5" />
-              </a>
-            </div>
           </div>
-          
-          <div>
-            <h3 className="text-white font-semibold mb-6">Product</h3>
-            <ul className="space-y-4">
-              <li><a href="#features" className="text-gray-400 hover:text-white transition-colors">Features</a></li>
-              <li><a href="#how-it-works" className="text-gray-400 hover:text-white transition-colors">How It Works</a></li>
-              <li><a href="#pricing" className="text-gray-400 hover:text-white transition-colors">Pricing</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Templates</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Integrations</a></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h3 className="text-white font-semibold mb-6">Resources</h3>
-            <ul className="space-y-4">
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Documentation</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">API</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Guides</a></li>
-              <li><a href="#faq" className="text-gray-400 hover:text-white transition-colors">FAQ</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h3 className="text-white font-semibold mb-6">Company</h3>
-            <ul className="space-y-4">
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms</a></li>
-            </ul>
+
+          {/* Contact section */}
+          <div className="flex flex-col items-center lg:items-end">
+            <a 
+              id="contact" 
+              href="mailto:info@sketchy.com" 
+              className="group relative overflow-hidden bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25"
+            >
+              <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+              <div className="relative flex items-center">
+                <Mail className="h-5 w-5 mr-3" />
+                Contact Us
+              </div>
+            </a>
           </div>
         </div>
         
-        <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-gray-500 text-sm order-2 md:order-1 mt-4 md:mt-0">
-            &copy; {new Date().getFullYear()} Sketchy. All rights reserved.
-          </p>
-          
-          <div className="order-1 md:order-2">
-            <a id="contact" href="mailto:info@sketchy.com" className="flex items-center bg-gray-800 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-colors">
-              <Mail className="h-4 w-4 mr-2" />
-              Contact Us
-            </a>
+        {/* Bottom section */}
+        <div className="pt-8 border-t border-slate-800/50">
+          <div className="text-center">
+            <p className="text-slate-400 text-sm">
+              &copy; {new Date().getFullYear()} Sketchy. All rights reserved.
+            </p>
           </div>
         </div>
       </div>

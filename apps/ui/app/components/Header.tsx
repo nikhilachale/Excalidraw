@@ -37,20 +37,7 @@ const Header: React.FC = () => {
         <Link href="/" className="text-lg font-semibold text-white">
           Sketchy
         </Link>
-        <nav className="hidden items-center gap-8 text-sm text-slate-300 md:flex">
-          <a href="#features" className="hover:text-white">
-            Features
-          </a>
-          <a href="#how-it-works" className="hover:text-white">
-            How it works
-          </a>
-          <a href="#pricing" className="hover:text-white">
-            Pricing
-          </a>
-          <a href="#faq" className="hover:text-white">
-            FAQ
-          </a>
-        </nav>
+   
         <div className="flex items-center gap-3">
           {userInitial ? (
             <div className="relative group">

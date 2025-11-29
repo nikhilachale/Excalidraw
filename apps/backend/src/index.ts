@@ -8,35 +8,49 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
 const app = express();
 app.use(express.json());
-// CORS configuration: allow only trusted origins and support preflight
+
 const allowedOrigins = [
-  'http://localhost:4002',
-  'https://canvas-ui.onrender.com'
+  'http://localhost:4002', 
+  'https://canvas-ui.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:3001'
 ];
 
-const corsMiddleware: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+const corsMiddleware: RequestHandler = (req, res, next) => {
   const origin = req.headers.origin as string | undefined;
-  if (!origin) {
-    next();
-    return;
-  } // allow non-browser requests
-  if (allowedOrigins.includes(origin)) {
+  
+  // For development, allow localhost and specific origins
+  // For production, strictly validate origins
+  const isAllowedOrigin = origin && allowedOrigins.includes(origin);
+
+  
+  if (isAllowedOrigin ) {
     res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    if (req.method === 'OPTIONS') {
-      res.sendStatus(204);
+  }  else {
+    // In production, reject unauthorized origins
+    if (origin && !isAllowedOrigin) {
+      res.status(403).json({ message: 'CORS policy: Origin not allowed' });
       return;
     }
-    next();
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Access-Control-Request-Private-Network');
+  res.header('Access-Control-Allow-Credentials', 'true');
+
+  // Handle private network access
+  if (req.headers['access-control-request-private-network']) {
+    res.header('Access-Control-Allow-Private-Network', 'true');
+  }
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
     return;
   }
-  // disallow other origins
-  res.status(403).json({ message: 'CORS policy: Origin not allowed' });
-  return;
+  
+  next();
 };
-
 app.use(corsMiddleware);
 
 app.post("/signup", async (req, res) => {

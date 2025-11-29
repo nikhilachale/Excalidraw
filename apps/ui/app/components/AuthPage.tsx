@@ -3,8 +3,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import Link from "next/link";
 
-// const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://canvas-be-m6vl.onrender.com";
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+const BACKEND =  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
 console.log("Using BACKEND URL:", BACKEND);
 export function AuthPage({ isSignin }: { isSignin: boolean }) {

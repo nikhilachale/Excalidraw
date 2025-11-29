@@ -1,11 +1,10 @@
-FROM node:22-alpine3.18
+FROM node:22-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Update OS packages and install runtime/build dependencies
-RUN apk --no-cache upgrade && \
-	apk add --no-cache libc6-compat
+# Install runtime/build dependencies
+RUN apk add --no-cache libc6-compat
 
 # Enable corepack and prepare pnpm
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
