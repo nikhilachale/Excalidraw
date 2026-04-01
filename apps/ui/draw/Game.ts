@@ -35,6 +35,9 @@ export class Game {
     private selectedTool: Tool = "circle";
     private strokeColor: string = "#3B82F6";
     private undoHistory: Shape[][] = [];
+    private animationFrameId: number | null = null;
+    private previewX = 0;
+    private previewY = 0;
 
     socket: WebSocket;
 
@@ -56,6 +59,11 @@ export class Game {
         this.canvas.removeEventListener("mouseup", this.mouseUpHandler)
 
         this.canvas.removeEventListener("mousemove", this.mouseMoveHandler)
+
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
     }
 
     setTool(tool: "circle" | "line" | "rect") {
@@ -64,6 +72,16 @@ export class Game {
 
     setStrokeColor(color: string) {
         this.strokeColor = color;
+    }
+
+    clearShapes() {
+        if (this.existingShapes.length === 0) {
+            return;
+        }
+
+        this.saveToHistory();
+        this.existingShapes = [];
+        this.clearCanvas();
     }
 
     undo() {
@@ -89,7 +107,6 @@ export class Game {
 
     async init() {
         this.existingShapes = await getExistingShapes(this.roomId);
-        console.log( " printinf :",this.existingShapes);
         this.clearCanvas();
     }
 
@@ -113,45 +130,101 @@ export class Game {
         }
     }
 
-    clearCanvas() {
+    private drawShape(shape: Shape) {
+        this.ctx.strokeStyle = shape.color || this.strokeColor;
+
+        if (shape.type === "rect") {
+            this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+            return;
+        }
+
+        if (shape.type === "circle") {
+            this.ctx.beginPath();
+            this.ctx.arc(shape.centerX, shape.centerY, Math.abs(shape.radius), 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.closePath();
+            return;
+        }
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(shape.startX, shape.startY);
+        this.ctx.lineTo(shape.endX, shape.endY);
+        this.ctx.stroke();
+        this.ctx.closePath();
+    }
+
+    private renderScene(previewX?: number, previewY?: number) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.fillStyle = "black"
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.lineWidth = 2;
 
-        this.existingShapes.map((shape) => {
-            if (shape.type === "rect") {
-                 console.log(shape);
-                this.ctx.strokeStyle = shape.color || this.strokeColor;
-                this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-            } else if (shape.type === "circle") {
-                 console.log(shape);
+        for (const shape of this.existingShapes) {
+            this.drawShape(shape);
+        }
 
-                this.ctx.strokeStyle = shape.color || this.strokeColor;
-                this.ctx.beginPath();
-                this.ctx.arc(shape.centerX, shape.centerY, Math.abs(shape.radius), 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.closePath();                
-            }
-            else if (shape.type === "line") {
-                 console.log(shape);
+        if (!this.clicked || previewX === undefined || previewY === undefined) {
+            return;
+        }
+
+        const width = previewX - this.startX;
+        const height = previewY - this.startY;
+        const selectedTool = this.selectedTool;
+        this.ctx.strokeStyle = this.strokeColor;
+
+        if (selectedTool === "rect") {
+            this.ctx.strokeRect(this.startX, this.startY, width, height);
+            return;
+        }
+
+        if (selectedTool === "circle") {
+            const radius = Math.max(Math.abs(width), Math.abs(height)) / 2;
+            const centerX = this.startX + width / 2;
+            const centerY = this.startY + height / 2;
             this.ctx.beginPath();
-            this.ctx.strokeStyle = shape.color || this.strokeColor;
-            this.ctx.moveTo(shape.startX, shape.startY);
-            this.ctx.lineTo(shape.endX, shape.endY);
+            this.ctx.arc(centerX, centerY, Math.abs(radius), 0, Math.PI * 2);
             this.ctx.stroke();
             this.ctx.closePath();
+            return;
         }
-        })
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.startX, this.startY);
+        this.ctx.lineTo(previewX, previewY);
+        this.ctx.stroke();
+        this.ctx.closePath();
     }
 
-    mouseDownHandler = (e:any) => {
+    clearCanvas() {
+        this.renderScene();
+    }
+
+    private schedulePreviewRender() {
+        if (this.animationFrameId !== null) {
+            return;
+        }
+
+        this.animationFrameId = requestAnimationFrame(() => {
+            this.animationFrameId = null;
+
+            if (this.clicked) {
+                this.renderScene(this.previewX, this.previewY);
+                return;
+            }
+
+            this.renderScene();
+        });
+    }
+
+    mouseDownHandler = (e: MouseEvent) => {
         this.clicked = true
         const rect = this.canvas.getBoundingClientRect();
         this.startX = e.clientX - rect.left
         this.startY = e.clientY - rect.top
+        this.previewX = this.startX;
+        this.previewY = this.startY;
     }
-    mouseUpHandler = (e:any) => {
+    mouseUpHandler = (e: MouseEvent) => {
         this.clicked = false
         const rect = this.canvas.getBoundingClientRect();
         const currentX = e.clientX - rect.left;
@@ -200,6 +273,7 @@ export class Game {
         }
 
         this.existingShapes.push(shape);
+        this.clearCanvas();
 
         this.socket.send(JSON.stringify({
             type: "chat",
@@ -209,38 +283,12 @@ export class Game {
             roomId: this.roomId
         }))
     }
-    mouseMoveHandler = (e:any) => {
+    mouseMoveHandler = (e: MouseEvent) => {
         if (this.clicked) {
             const rect = this.canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            const currentY = e.clientY - rect.top;
-            const width = currentX - this.startX;
-            const height = currentY - this.startY;
-            this.clearCanvas();
-            this.ctx.strokeStyle = this.strokeColor;
-            this.ctx.lineWidth = 2;
-            const selectedTool = this.selectedTool;
-            console.log(selectedTool)
-            if (selectedTool === "rect") {
-                this.ctx.strokeRect(this.startX, this.startY, width, height);   
-            } else if (selectedTool === "circle") {
-                this.ctx.strokeStyle = this.strokeColor;
-                const radius = Math.max(Math.abs(width), Math.abs(height)) / 2;
-                const centerX = this.startX + width / 2;
-                const centerY = this.startY + height / 2;
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, Math.abs(radius), 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.closePath();                
-            }
-             else if (selectedTool === "line") {
-               this.ctx.strokeStyle = this.strokeColor;
-               this.ctx.beginPath();
-               this.ctx.moveTo(this.startX, this.startY);
-               this.ctx.lineTo(currentX, currentY); 
-               this.ctx.stroke();
-               this.ctx.closePath();
-              }
+            this.previewX = e.clientX - rect.left;
+            this.previewY = e.clientY - rect.top;
+            this.schedulePreviewRender();
         }
     }
 

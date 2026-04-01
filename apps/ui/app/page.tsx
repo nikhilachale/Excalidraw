@@ -6,6 +6,7 @@ import Hero from "./components/Hero";
 import HowItWorks from "./components/HowItWorks";
 import Footer from "./components/Footer";
 import { backend_url } from "../config";
+import type { CreateRoomResponse, RoomLookupResponse } from "@repo/common/types";
 
 export default function Home() {
   const router = useRouter();
@@ -15,6 +16,15 @@ export default function Home() {
   const [roomName, setRoomName] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const normalizeRoomSlug = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
 
   useEffect(() => {
     const anchors = document.querySelectorAll('a[href^="#"]');
@@ -33,8 +43,9 @@ export default function Home() {
     setLoading(true);
     setStatus(null);
     try {
-      const response = await fetch(`${backend_url}/room/${encodeURIComponent(slug)}`);
-      const result = await response.json();
+      const query = /^\d+$/.test(slug.trim()) ? slug.trim() : normalizeRoomSlug(slug);
+      const response = await fetch(`${backend_url}/room/${encodeURIComponent(query)}`);
+      const result = (await response.json()) as Partial<RoomLookupResponse> & { message?: string };
       if (!response.ok || !result?.data?.id) {
         throw new Error(result?.message ?? "Room not found");
       }
@@ -78,26 +89,20 @@ export default function Home() {
       }
 
       // Normalize parsed result into a typed shape we can safely inspect
-      const parsed = (result as Record<string, unknown> | null) ?? null;
+      const parsed = result as Partial<CreateRoomResponse> & { message?: string } | null;
 
       if (!response.ok) {
         // prefer backend-provided message if present and a string
-        const msg = parsed && typeof parsed['message'] === 'string'
-          ? (parsed['message'] as string)
+        const msg = parsed && typeof parsed.message === 'string'
+          ? parsed.message
           : `Server responded ${response.status}`;
         throw new Error(msg);
       }
 
-      // backend may respond with different shapes; attempt safe extraction
-      const data = parsed && (parsed['data'] as Record<string, unknown> | undefined);
-      const roomId = parsed && (
-        parsed['roomId'] ??
-        (data && (data['roomId'] ?? data['id'])) ??
-        parsed['id']
-      );
+      const roomId = parsed?.roomId;
 
       if (!roomId) {
-        const errMsg = parsed && typeof parsed['message'] === 'string' ? (parsed['message'] as string) : "Unable to create room";
+        const errMsg = parsed && typeof parsed.message === 'string' ? parsed.message : "Unable to create room";
         throw new Error(errMsg);
       }
 

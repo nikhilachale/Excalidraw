@@ -1,6 +1,12 @@
 import express from "express";
 import { prismaClient } from "@repo/db/client";
-import { CreateUserSchema, SigninSchema, CreateRoomSchema } from "@repo/common/types";
+import {
+  CreateUserSchema,
+  SigninSchema,
+  CreateRoomSchema,
+  type CreateRoomResponse,
+  type RoomLookupResponse,
+} from "@repo/common/types";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from '@repo/common-backend/config';
 import { middleware } from "./middleware";
@@ -8,6 +14,16 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
 const app = express();
 app.use(express.json());
+
+function normalizeRoomSlug(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 const allowedOrigins = [
   'http://localhost:4002', 
@@ -177,15 +193,34 @@ app.post("/room", middleware, async (req, res) => {
   // @ts-ignore
   const userId = req.userId;
   try {
+    const baseSlug = normalizeRoomSlug(parsedData.data.name);
+    if (!baseSlug || baseSlug.length < 3) {
+      res.status(400).json({ message: "Room name must produce a valid slug" });
+      return;
+    }
+
+    let slug = baseSlug;
+    let suffix = 1;
+    while (true) {
+      const existing = await prismaClient.room.findUnique({ where: { slug } });
+      if (!existing) {
+        break;
+      }
+      suffix += 1;
+      slug = `${baseSlug}-${suffix}`;
+    }
+
     const room = await prismaClient.room.create({
       data: {
-        slug: parsedData.data.name,
+        slug,
         adminId: userId,
       },
     });
-    res.json({
+    const payload: CreateRoomResponse = {
       roomId: room.id,
-    });
+      slug: room.slug,
+    };
+    res.json(payload);
   } catch (err) {
     console.log("error in creating room: ", err);
     res.status(500).json({ message: "error in creating room" });
@@ -233,19 +268,30 @@ app.post("/chats/:roomId/clear", async (req, res) => {
 });
 
 app.get("/room/:slug", async (req, res) => {
-  const slug = req.params.slug;
-  console.log("slug:", slug);
+  const roomRef = req.params.slug.trim();
+  console.log("room lookup:", roomRef);
 
   try {
-    const data = await prismaClient.room.findUnique({
-      where: {
-        slug,
-      },
-    });
-    res.json({
+    const normalizedSlug = normalizeRoomSlug(roomRef);
+    const numericId = Number(roomRef);
+
+    const data = Number.isInteger(numericId)
+      ? await prismaClient.room.findUnique({ where: { id: numericId } })
+      : await prismaClient.room.findUnique({ where: { slug: normalizedSlug } });
+
+    if (!data) {
+      res.status(404).json({ message: "room not found" });
+      return;
+    }
+
+    const payload: RoomLookupResponse = {
       message: "room found",
-      data: data,
-    });
+      data: {
+        id: data.id,
+        slug: data.slug,
+      },
+    };
+    res.json(payload);
   } catch (e) {
     console.error("error in getting room:", e);
     res.status(500).json({ message: "error in getting room" });

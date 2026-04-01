@@ -1,85 +1,139 @@
-# Turborepo starter
+# Excalidraw Monorepo
 
-This Turborepo starter is maintained by the Turborepo core team.
+Collaborative drawing application built with Turborepo, Next.js, Express, WebSocket, and Prisma.
 
-## Using this example
+## Stack
 
-Run the following command:
+- Frontend: Next.js 15, React 19, Tailwind CSS 4
+- Backend API: Express + TypeScript
+- Realtime: ws WebSocket server
+- Database: PostgreSQL + Prisma
+- Tooling: pnpm workspaces + Turborepo
 
-```sh
-npx create-turbo@latest
+## Monorepo Structure
+
+### Apps
+
+- apps/ui: Next.js application (default local port 4002)
+- apps/backend: REST API server (port 3001)
+- apps/websocket: realtime collaboration server (port 8080 by default)
+
+### Shared packages
+
+- packages/db: Prisma client and schema
+- packages/common: shared Zod/types
+- packages/common-backend: backend shared constants/config
+- packages/eslint-config: ESLint config package
+- packages/typescript-config: TypeScript config package
+- packages/ui: shared UI primitives
+
+## Prerequisites
+
+- Node.js 18+
+- pnpm 9+
+- PostgreSQL database
+
+## Environment Variables
+
+This repo includes .env.example at the root.
+
+1. Copy .env.example to .env.local for UI-focused local env.
+2. Ensure DATABASE_URL is set for Prisma-backed services.
+3. Set JWT_SECRET for backend and websocket auth.
+
+Common values used by this project:
+
+```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
+NODE_ENV=development
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME
+JWT_SECRET=replace-with-a-strong-secret
+PORT=8080
 ```
 
-## What's inside?
+## Install
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
+```bash
+pnpm install
 ```
-cd my-turborepo
+
+## Database Setup
+
+Run Prisma migrations before starting backend/websocket services.
+
+```bash
+pnpm --filter @repo/db exec prisma migrate deploy
+pnpm --filter @repo/db exec prisma generate
+```
+
+For local development with schema changes:
+
+```bash
+pnpm --filter @repo/db exec prisma migrate dev
+```
+
+## Build and Run
+
+### 1. Build all packages/apps
+
+```bash
 pnpm build
 ```
 
-### Develop
+### 2. Start all apps
 
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
+```bash
 pnpm dev
 ```
 
-### Remote Caching
+Important: apps/backend and apps/websocket dev scripts run compiled output from dist. If dist is missing, run pnpm build first.
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+## Useful Workspace Commands
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-npx turbo login
+```bash
+pnpm build
+pnpm dev
+pnpm lint
+pnpm check-types
+pnpm format
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+Target a specific workspace:
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
+```bash
+pnpm --filter ui dev
+pnpm --filter backend build
+pnpm --filter websocket build
 ```
-npx turbo link
-```
 
-## Useful Links
+## API and Realtime Notes
 
-Learn more about the power of Turborepo:
+- UI connects to backend using NEXT_PUBLIC_BACKEND_URL.
+- UI connects to websocket URL based on NODE_ENV:
+	- development: ws://localhost:8080
+	- production: wss://canvas-ws.onrender.com
+- Backend default port is 3001.
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
-# Excalidraw
+## Troubleshooting
+
+### UI cannot connect to backend
+
+- Verify NEXT_PUBLIC_BACKEND_URL points to http://localhost:3001 for local runs.
+- Check backend is running and CORS origin includes your UI origin.
+
+### WebSocket connection fails
+
+- Ensure websocket server is running on port 8080 (or PORT value).
+- Confirm JWT token is present and valid.
+
+### Runtime errors for missing dist
+
+- Run pnpm build before pnpm dev.
+
+## Deployment
+
+Dockerfiles are available in docker/:
+
+- docker/Dockerfile.ui
+- docker/Dockerfile.be
+- docker/Dockerfile.ws

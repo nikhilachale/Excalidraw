@@ -75,42 +75,50 @@ wss.on('connection', (ws, request) => {
     const user = users.get(ws);
     if (!user) return;
 
+    const roomKey = roomId !== undefined && roomId !== null ? String(roomId) : '';
+
     switch (type) {
       case 'join_room': {
-        if (!roomId) return;
-        if (!rooms.has(roomId)) rooms.set(roomId, { id: roomId, members: new Set() });
-        rooms.get(roomId)!.members.add(user);
+        if (!roomKey) return;
+        if (!rooms.has(roomKey)) rooms.set(roomKey, { id: roomKey, members: new Set() });
+        rooms.get(roomKey)!.members.add(user);
         break;
       }
 
       case 'leave_room': {
-        rooms.get(roomId)?.members.delete(user);
+        if (!roomKey) return;
+        rooms.get(roomKey)?.members.delete(user);
         break;
       }
 
       case 'chat': {
-        if (!roomId || !message) return;
+        if (!roomKey || !message) return;
 
         // 1️⃣ broadcast immediately (low latency)
-        const room = rooms.get(roomId);
+        const room = rooms.get(roomKey);
         if (room) {
-          const payload = JSON.stringify({ type: 'chat', message, roomId, sender: user.userId });
+          const payload = JSON.stringify({ type: 'chat', message, roomId: roomKey, sender: user.userId });
           for (const member of room.members) {
             if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
           }
         }
 
         // 2️⃣ save asynchronously
-        chatQueue.push({ roomId: Number(roomId), message, userId: user.userId });
+        const numericRoomId = Number(roomKey);
+        if (!Number.isInteger(numericRoomId)) {
+          send(ws, { type: 'error', message: 'Invalid room id for chat event' });
+          return;
+        }
+        chatQueue.push({ roomId: numericRoomId, message, userId: user.userId });
 
         break;
       }
 
       case 'clear': {
-        if (!roomId) return;
-        const room = rooms.get(roomId);
+        if (!roomKey) return;
+        const room = rooms.get(roomKey);
         if (room) {
-          const payload = JSON.stringify({ type: 'clear', roomId, sender: user.userId });
+          const payload = JSON.stringify({ type: 'clear', roomId: roomKey, sender: user.userId });
           for (const member of room.members) {
             if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
           }

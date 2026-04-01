@@ -18,8 +18,6 @@ export function Canvas({
   const [game, setGame] = useState<Game | undefined>();
   const [selectedTool, setSelectedTool] = useState<Tool>("circle");
   const [strokeColor, setStrokeColor] = useState<string>("#3B82F6");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
     if (game) {
@@ -28,50 +26,34 @@ export function Canvas({
     }
   }, [selectedTool, game, strokeColor]);
 
-  // Check authentication on component mount
-  useEffect(() => {
-    const checkAuthentication = () => {
-      try {
-        const token = localStorage.getItem('token');
-
-        if (token ) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsCheckingAuth(false);
-      }
-    };
-
-    checkAuthentication();
-  }, []);
-
   useEffect(() => {
     if (canvasRef.current) {
       const canvas = canvasRef.current;
-      const ratio = window.devicePixelRatio || 1;
-      // set CSS size (what the page sees)
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
-      // set actual drawing buffer size taking DPR into account
-      canvas.width = Math.max(1, Math.floor(window.innerWidth * ratio));
-      canvas.height = Math.max(1, Math.floor(window.innerHeight * ratio));
+      const resizeCanvas = () => {
+        const ratio = window.devicePixelRatio || 1;
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+        canvas.width = Math.max(1, Math.floor(window.innerWidth * ratio));
+        canvas.height = Math.max(1, Math.floor(window.innerHeight * ratio));
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        }
+
+        g.clearCanvas();
+      };
 
       const g = new Game(canvas, roomId, socket);
-      g.setStrokeColor(strokeColor);
-      g.setTool(selectedTool);
       setGame(g);
 
-      // ensure correct transform for crisp rendering
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      g.clearCanvas();
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
 
-      return () => g.destroy();
+      return () => {
+        window.removeEventListener("resize", resizeCanvas);
+        g.destroy();
+      };
     }
   }, [roomId, socket]); 
 
@@ -121,10 +103,8 @@ function Topbar({ selectedTool, setSelectedTool, socket, roomId, game, strokeCol
   const handleClear = async () => {
     try {
       await cleanCanvas(roomId);
+      game?.clearShapes();
       socket.send(JSON.stringify({ type: "clear", roomId }));
-      if (game) {
-        game.clearCanvas();
-      }
     } catch (error) {
       console.error("Failed to clear canvas:", error);
     }
