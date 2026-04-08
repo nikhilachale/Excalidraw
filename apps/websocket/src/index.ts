@@ -94,13 +94,22 @@ wss.on('connection', (ws, request) => {
       case 'chat': {
         if (!roomKey || !message) return;
 
-        // 1️⃣ broadcast immediately (low latency)
         const room = rooms.get(roomKey);
-        if (room) {
-          const payload = JSON.stringify({ type: 'chat', message, roomId: roomKey, sender: user.userId });
-          for (const member of room.members) {
-            if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
-          }
+        if (!room) {
+          send(ws, { type: 'error', message: 'Room not found' });
+          return;
+        }
+
+        // Verify user is in room
+        if (!room.members.has(user)) {
+          send(ws, { type: 'error', message: 'You must join room before sending messages' });
+          return;
+        }
+
+        // 1️⃣ broadcast immediately (low latency)
+        const payload = JSON.stringify({ type: 'chat', message, roomId: roomKey, sender: user.userId });
+        for (const member of room.members) {
+          if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
         }
 
         // 2️⃣ save asynchronously
@@ -117,14 +126,44 @@ wss.on('connection', (ws, request) => {
       case 'clear': {
         if (!roomKey) return;
         const room = rooms.get(roomKey);
-        if (room) {
-          const payload = JSON.stringify({ type: 'clear', roomId: roomKey, sender: user.userId });
-          for (const member of room.members) {
-            if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
-          }
+        if (!room) {
+          send(ws, { type: 'error', message: 'Room not found' });
+          break;
+        }
+
+        // Verify user is in room
+        if (!room.members.has(user)) {
+          send(ws, { type: 'error', message: 'You must join room before clearing' });
+          break;
+        }
+
+        // Verify user is room admin
+        const numericRoomId = Number(roomKey);
+        if (!Number.isInteger(numericRoomId)) {
+          send(ws, { type: 'error', message: 'Invalid room id' });
+          break;
+        }
+
+        const dbRoom = await prismaClient.room.findUnique({
+          where: { id: numericRoomId }
+        });
+
+        if (!dbRoom) {
+          send(ws, { type: 'error', message: 'Room not found' });
+          break;
+        }
+
+        if (dbRoom.adminId !== user.userId) {
+          send(ws, { type: 'error', message: 'Only room admin can clear canvas' });
+          break;
+        }
+
+        const payload = JSON.stringify({ type: 'clear', roomId: roomKey, sender: user.userId });
+        for (const member of room.members) {
+          if (member.ws.readyState === WebSocket.OPEN) member.ws.send(payload);
         }
         break;
-        
+
       }
 
       default:

@@ -251,10 +251,28 @@ app.get("/chats/:roomId", async (req, res) => {
   }
 });
 
-app.post("/chats/:roomId/clear", async (req, res) => {
-  console.log("Clear endpoint hit with roomId:", req.params.roomId); // Add this
+app.post("/chats/:roomId/clear", middleware, async (req, res) => {
+  // @ts-ignore
+  const userId = req.userId;
+  console.log("Clear endpoint hit with roomId:", req.params.roomId);
   try {
     const roomId = Number(req.params.roomId);
+
+    // Verify user is the room admin
+    const room = await prismaClient.room.findUnique({
+      where: { id: roomId }
+    });
+
+    if (!room) {
+      res.status(404).json({ message: "Room not found" });
+      return;
+    }
+
+    if (room.adminId !== userId) {
+      res.status(403).json({ message: "Only room admin can clear the canvas" });
+      return;
+    }
+
     await prismaClient.chat.deleteMany({
       where: {
         roomId: roomId,
