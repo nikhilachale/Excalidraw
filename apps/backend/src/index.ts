@@ -1,5 +1,10 @@
 import express from "express";
-import { prismaClient } from "@repo/db/client";
+import {
+  prismaClient,
+  executeTransaction,
+  checkDatabaseHealth,
+  closeDatabaseConnection,
+} from "@repo/db/client";
 import {
   CreateUserSchema,
   SigninSchema,
@@ -9,11 +14,28 @@ import {
 } from "@repo/common/types";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from '@repo/common-backend/config';
-import { middleware } from "./middleware";
-import type { Request, Response, NextFunction, RequestHandler } from 'express';
+import { middleware } from "./middleware.js";
+import type { Request, Response, RequestHandler } from 'express';
+import {
+  errorHandler,
+  asyncHandler,
+  requestIdMiddleware,
+  notFoundHandler,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  DatabaseError,
+  logger,
+  attachRequestId,
+  detachRequestId,
+} from "@repo/common-backend";
 
 const app = express();
 app.use(express.json());
+
+// Apply request ID middleware to all requests
+app.use(requestIdMiddleware);
 
 function normalizeRoomSlug(input: string): string {
   return input
@@ -26,7 +48,7 @@ function normalizeRoomSlug(input: string): string {
 }
 
 const allowedOrigins = [
-  'http://localhost:4002', 
+  'http://localhost:4002',
   'https://canvas-ui.onrender.com',
   'http://localhost:3000',
   'http://localhost:3001'
@@ -34,12 +56,12 @@ const allowedOrigins = [
 
 const corsMiddleware: RequestHandler = (req, res, next) => {
   const origin = req.headers.origin as string | undefined;
-  
+
   // For development, allow localhost and specific origins
   // For production, strictly validate origins
   const isAllowedOrigin = origin && allowedOrigins.includes(origin);
 
-  
+
   if (isAllowedOrigin ) {
     res.header('Access-Control-Allow-Origin', origin);
   }  else {
@@ -49,7 +71,7 @@ const corsMiddleware: RequestHandler = (req, res, next) => {
       return;
     }
   }
-  
+
   res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Access-Control-Request-Private-Network');
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -64,33 +86,50 @@ const corsMiddleware: RequestHandler = (req, res, next) => {
     res.status(200).end();
     return;
   }
-  
+
   next();
 };
 app.use(corsMiddleware);
 
-app.post("/signup", async (req, res) => {
-  const parsedData = CreateUserSchema.safeParse(req.body);
-  if (!parsedData.success) {
-    console.log("incorrect input:  ", parsedData.error);
-    res.status(400).json({
-      message: "incorrect inputs",
-    });
-    return;
-  }
+/**
+ * POST /signup - Create a new user account
+ */
+app.post("/signup", asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
 
-  const data = parsedData.data;
-
-  console.log("Creating user with data:", data);
   try {
-    const user = await prismaClient.user.create({
-      data: {
-        name: data.name,
-        email: data.username,
-        password: data.password,
-      },
+    const parsedData = CreateUserSchema.safeParse(req.body);
+    if (!parsedData.success) {
+      logger.warn('Signup validation failed', { errors: parsedData.error.errors });
+      throw new ValidationError('Invalid user data', { errors: parsedData.error.errors });
+    }
+
+    const data = parsedData.data;
+
+    logger.info('Creating user', { username: data.username });
+
+    // Check if user already exists
+    const existingUser = await prismaClient.user.findUnique({
+      where: { email: data.username },
     });
-    
+
+    if (existingUser) {
+      logger.warn('User already exists', { username: data.username });
+      throw new ValidationError('User with this email already exists');
+    }
+
+    // Create user in a transaction
+    const user = await executeTransaction(async (tx) => {
+      return await tx.user.create({
+        data: {
+          name: data.name,
+          email: data.username,
+          password: data.password,
+        },
+      });
+    });
+
     // Generate token for immediate login after signup
     const token = jwt.sign(
       {
@@ -98,43 +137,50 @@ app.post("/signup", async (req, res) => {
       },
       JWT_SECRET
     );
-    
-    res.json({
+
+    logger.info('User created successfully', { userId: user.id });
+
+    res.status(201).json({
       userId: user.id,
       token,
     });
-
-    console.log("User created with ID:", user.id);
-    console.log("User created with token:", token);
-  } catch (e) {
-    console.log("error in creating user: ", e);
-    res.status(500).json({ message: "error in creating user" });
+  } finally {
+    detachRequestId();
   }
-});
+}));
 
-app.post("/signin", async (req, res) => {
-  const parsedData = SigninSchema.safeParse(req.body);
-  if (!parsedData.success) {
-    console.log("incorrect input:  ", parsedData.error);
-    res.status(400).json({
-      message: "incorrect inputs",
-    });
-    return;
-  }
+/**
+ * POST /signin - Authenticate user and return token
+ */
+app.post("/signin", asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
 
-  const data = parsedData.data;
   try {
+    const parsedData = SigninSchema.safeParse(req.body);
+    if (!parsedData.success) {
+      logger.warn('Signin validation failed', { errors: parsedData.error.errors });
+      throw new ValidationError('Invalid signin data', { errors: parsedData.error.errors });
+    }
+
+    const data = parsedData.data;
+
+    logger.info('User signin attempt', { email: data.username });
+
     const user = await prismaClient.user.findUnique({
       where: {
         email: data.username,
       },
     });
 
-    if (!user || user.password !== data.password) {
-      res.status(401).json({
-        message: "user not found check credentials",
-      });
-      return;
+    if (!user) {
+      logger.warn('Signin failed: user not found', { email: data.username });
+      throw new AuthenticationError('Invalid credentials');
+    }
+
+    if (user.password !== data.password) {
+      logger.warn('Signin failed: incorrect password', { email: data.username });
+      throw new AuthenticationError('Invalid credentials');
     }
 
     const token = jwt.sign(
@@ -143,30 +189,38 @@ app.post("/signin", async (req, res) => {
       },
       JWT_SECRET
     );
+
+    logger.info('User signed in successfully', { userId: user.id });
+
     res.json({
       token,
     });
-  } catch (e) {
-    console.log("error in signin: ", e);
-    res.status(500).json({
-      message: "error in signing in",
-    });
+  } finally {
+    detachRequestId();
   }
-});
+}));
 
-app.get("/userinfo", middleware, async (req, res) => {
-  // @ts-ignore
-  const userId = req.userId;
+/**
+ * GET /userinfo - Get current user information
+ */
+app.get("/userinfo", middleware, asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
 
   try {
+    // @ts-ignore
+    const userId = req.userId;
+
     const user = await prismaClient.user.findUnique({
       where: { id: String(userId) },
     });
 
     if (!user) {
-      res.status(404).json({ message: "user not found" });
-      return;
+      logger.warn('User not found', { userId });
+      throw new NotFoundError('User');
     }
+
+    logger.info('User info retrieved', { userId });
 
     res.json({
       user: {
@@ -175,61 +229,92 @@ app.get("/userinfo", middleware, async (req, res) => {
         email: user.email,
       },
     });
-  } catch (e) {
-    console.error("error in getting user info:", e);
-    res.status(500).json({ message: "error in getting user info" });
+  } finally {
+    detachRequestId();
   }
-});
+}));
 
-app.post("/room", middleware, async (req, res) => {
-  const parsedData = CreateRoomSchema.safeParse(req.body);
-  if (!parsedData.success) {
-    res.status(400).json({
-      message: "Incorrect inputs",
-    });
-    return;
-  }
+/**
+ * POST /room - Create a new room
+ */
+app.post("/room", middleware, asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
 
-  // @ts-ignore
-  const userId = req.userId;
   try {
+    const parsedData = CreateRoomSchema.safeParse(req.body);
+    if (!parsedData.success) {
+      logger.warn('Room creation validation failed', { errors: parsedData.error.errors });
+      throw new ValidationError('Invalid room data', { errors: parsedData.error.errors });
+    }
+
+    // @ts-ignore
+    const userId = req.userId;
+
     const baseSlug = normalizeRoomSlug(parsedData.data.name);
     if (!baseSlug || baseSlug.length < 3) {
-      res.status(400).json({ message: "Room name must produce a valid slug" });
-      return;
+      throw new ValidationError('Room name must produce a valid slug (at least 3 characters)');
     }
 
-    let slug = baseSlug;
-    let suffix = 1;
-    while (true) {
-      const existing = await prismaClient.room.findUnique({ where: { slug } });
-      if (!existing) {
-        break;
+    logger.info('Creating room', { adminId: userId, name: parsedData.data.name });
+
+    // Create room in a transaction with unique slug generation
+    const room = await executeTransaction(async (tx) => {
+      let slug = baseSlug;
+      let suffix = 1;
+
+      // Find unique slug
+      while (true) {
+        const existing = await tx.room.findUnique({ where: { slug } });
+        if (!existing) {
+          break;
+        }
+        suffix += 1;
+        slug = `${baseSlug}-${suffix}`;
+
+        // Safety limit to prevent infinite loops
+        if (suffix > 1000) {
+          throw new DatabaseError('Could not generate unique room slug');
+        }
       }
-      suffix += 1;
-      slug = `${baseSlug}-${suffix}`;
-    }
 
-    const room = await prismaClient.room.create({
-      data: {
-        slug,
-        adminId: userId,
-      },
+      return await tx.room.create({
+        data: {
+          slug,
+          adminId: userId,
+        },
+      });
     });
+
     const payload: CreateRoomResponse = {
       roomId: room.id,
       slug: room.slug,
     };
-    res.json(payload);
-  } catch (err) {
-    console.log("error in creating room: ", err);
-    res.status(500).json({ message: "error in creating room" });
-  }
-});
 
-app.get("/chats/:roomId", async (req, res) => {
+    logger.info('Room created successfully', { roomId: room.id, slug: room.slug });
+
+    res.status(201).json(payload);
+  } finally {
+    detachRequestId();
+  }
+}));
+
+/**
+ * GET /chats/:roomId - Get chat messages for a room
+ */
+app.get("/chats/:roomId", asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
+
   try {
     const roomId = Number(req.params.roomId);
+
+    if (!Number.isInteger(roomId) || roomId <= 0) {
+      throw new ValidationError('Invalid room ID');
+    }
+
+    logger.info('Fetching chat messages', { roomId });
+
     const messages = await prismaClient.chat.findMany({
       where: {
         roomId: roomId,
@@ -240,66 +325,97 @@ app.get("/chats/:roomId", async (req, res) => {
       take: 1000,
     });
 
+    logger.info('Chat messages retrieved', { roomId, count: messages.length });
+
     res.json({
       messages,
     });
-  } catch (e) {
-    console.log(e);
-    res.json({
-      messages: [],
-    });
+  } finally {
+    detachRequestId();
   }
-});
+}));
 
-app.post("/chats/:roomId/clear", middleware, async (req, res) => {
-  // @ts-ignore
-  const userId = req.userId;
-  console.log("Clear endpoint hit with roomId:", req.params.roomId);
+/**
+ * POST /chats/:roomId/clear - Clear all chat messages in a room (admin only)
+ */
+app.post("/chats/:roomId/clear", middleware, asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
+
   try {
+    // @ts-ignore
+    const userId = req.userId;
+
     const roomId = Number(req.params.roomId);
 
-    // Verify user is the room admin
-    const room = await prismaClient.room.findUnique({
-      where: { id: roomId }
-    });
-
-    if (!room) {
-      res.status(404).json({ message: "Room not found" });
-      return;
+    if (!Number.isInteger(roomId) || roomId <= 0) {
+      throw new ValidationError('Invalid room ID');
     }
 
-    if (room.adminId !== userId) {
-      res.status(403).json({ message: "Only room admin can clear the canvas" });
-      return;
-    }
+    logger.info('Clearing room canvas', { roomId, userId });
 
-    await prismaClient.chat.deleteMany({
-      where: {
-        roomId: roomId,
+    // Clear messages in a transaction
+    await executeTransaction(async (tx) => {
+      // Verify user is the room admin
+      const room = await tx.room.findUnique({
+        where: { id: roomId }
+      });
+
+      if (!room) {
+        logger.warn('Room not found for clear operation', { roomId });
+        throw new NotFoundError('Room');
       }
-    });
-    res.json({ message: "Canvas cleared" });
-  } catch (e) {
-    console.error("Error clearing canvas:", e);
-    res.status(500).json({ message: "Error clearing canvas" });
-  }
-});
 
-app.get("/room/:slug", async (req, res) => {
-  const roomRef = req.params.slug.trim();
-  console.log("room lookup:", roomRef);
+      if (room.adminId !== userId) {
+        logger.warn('Unauthorized clear attempt', { roomId, userId, adminId: room.adminId });
+        throw new AuthorizationError('Only room admin can clear the canvas');
+      }
+
+      // Delete all chat messages
+      await tx.chat.deleteMany({
+        where: {
+          roomId: roomId,
+        }
+      });
+    });
+
+    logger.info('Room canvas cleared successfully', { roomId });
+
+    res.json({ message: "Canvas cleared" });
+  } finally {
+    detachRequestId();
+  }
+}));
+
+/**
+ * GET /room/:slug - Look up a room by slug or ID
+ */
+app.get("/room/:slug", asyncHandler(async (req: Request, res: Response) => {
+  const requestId = req.headers['x-request-id'] as string;
+  attachRequestId(requestId);
 
   try {
+    const roomRef = (req.params.slug || '').trim();
+
+    if (!roomRef) {
+      throw new ValidationError('Room identifier is required');
+    }
+
+    logger.info('Room lookup', { roomRef });
+
     const normalizedSlug = normalizeRoomSlug(roomRef);
     const numericId = Number(roomRef);
 
-    const data = Number.isInteger(numericId)
-      ? await prismaClient.room.findUnique({ where: { id: numericId } })
-      : await prismaClient.room.findUnique({ where: { slug: normalizedSlug } });
+    let data;
+    if (Number.isInteger(numericId) && numericId > 0) {
+      data = await prismaClient.room.findUnique({ where: { id: numericId } });
+    } else {
+      data = await prismaClient.room.findUnique({ where: { slug: normalizedSlug } });
+    }
 
     if (!data) {
-      res.status(404).json({ message: "room not found" });
-      return;
+      logger.warn('Room not found', { roomRef });
+      throw new NotFoundError('Room');
     }
 
     const payload: RoomLookupResponse = {
@@ -309,15 +425,97 @@ app.get("/room/:slug", async (req, res) => {
         slug: data.slug,
       },
     };
+
+    logger.info('Room found', { roomId: data.id, slug: data.slug });
+
     res.json(payload);
-  } catch (e) {
-    console.error("error in getting room:", e);
-    res.status(500).json({ message: "error in getting room" });
+  } finally {
+    detachRequestId();
   }
+}));
+
+/**
+ * GET /health - Health check endpoint
+ */
+app.get("/health", asyncHandler(async (req: Request, res: Response) => {
+  const dbHealth = await checkDatabaseHealth();
+
+  const health = {
+    status: dbHealth.healthy ? 'healthy' : 'unhealthy',
+    timestamp: new Date().toISOString(),
+    database: dbHealth,
+  };
+
+  const statusCode = dbHealth.healthy ? 200 : 503;
+  res.status(statusCode).json(health);
+}));
+
+/**
+ * GET /ready - Readiness check endpoint
+ */
+app.get("/ready", asyncHandler(async (_req: Request, res: Response) => {
+  const dbHealth = await checkDatabaseHealth();
+
+  if (!dbHealth.healthy) {
+    res.status(503).json({
+      ready: false,
+      database: dbHealth,
+    });
+    return;
+  }
+
+  res.json({
+    ready: true,
+    timestamp: new Date().toISOString(),
+  });
+}));
+
+// Apply error handling middleware
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// Start server
+const PORT = process.env.PORT || 3001;
+
+const server = app.listen(PORT, () => {
+  logger.info(`Server is running on port ${PORT}`);
+  logger.info('Routes registered:', {
+    routes: [
+      'POST /signup',
+      'POST /signin',
+      'GET /userinfo',
+      'POST /room',
+      'GET /chats/:roomId',
+      'POST /chats/:roomId/clear',
+      'GET /room/:slug',
+      'GET /health',
+      'GET /ready',
+    ]
+  });
 });
 
-app.listen(3001, () => {
-  console.log("Server is running on port 3001");
-  console.log("Routes registered:"); 
-  console.log("POST /chats/:roomId/clear"); 
-});
+// Graceful shutdown
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} received, shutting down gracefully...`);
+
+  server.close(async () => {
+    logger.info('HTTP server closed');
+
+    try {
+      await closeDatabaseConnection();
+      process.exit(0);
+    } catch (error) {
+      logger.error('Error during shutdown', error instanceof Error ? error : undefined);
+      process.exit(1);
+    }
+  });
+
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

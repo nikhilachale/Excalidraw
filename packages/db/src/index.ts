@@ -10,3 +10,6 @@ if (!globalForPrisma.__prismaClient__) {
 	// @ts-ignore - runtime cache key on globalThis
 	globalForPrisma.__prismaClient__ = prismaClient;
 }
+
+// Export transaction utilities
+export * from './transactions.js';

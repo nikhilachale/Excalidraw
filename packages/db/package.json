@@ -1,11 +1,14 @@
 {
   "name": "@repo/db",
   "version": "1.0.0",
-  "main": "index.js",
-   "exports":{
-    "./client": "./src/index.ts"
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/index.js"
   },
   "scripts": {
+    "build": "tsc -b",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -17,6 +20,7 @@
     "prisma": "^6.8.2"
   },
   "dependencies": {
-    "@prisma/client": "^6.8.2"
+    "@prisma/client": "^6.8.2",
+    "@repo/common-backend": "workspace:*"
   }
 }
