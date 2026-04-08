@@ -28,6 +28,7 @@ export default function RoomCanvas({ roomId }: { roomId: string }) {
 
     ws.onclose = () => {
       console.warn("WebSocket closed.");
+      setSocket(null);
     };
 
     ws.onerror = (err) => {
@@ -35,7 +36,7 @@ export default function RoomCanvas({ roomId }: { roomId: string }) {
     };
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState !== WebSocket.CLOSED) {
         ws.close();
       }
     };
