@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Circle, Pencil, RectangleHorizontalIcon } from "lucide-react";
+import { Circle, Pencil, RectangleHorizontalIcon, Wifi, WifiOff } from "lucide-react";
 import { Game } from "@/draw/Game";
 import { IconButton } from "./IconButton";
 export type Tool = "circle" | "rect" | "line";
@@ -9,10 +9,12 @@ import { cleanCanvas } from "@/draw/http";
 
 export function Canvas({
   roomId,
-  socket
+  socket,
+  sendMessage
 }: {
-  socket: WebSocket;
+  socket: WebSocket | null;
   roomId: string;
+  sendMessage?: (message: string) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | undefined>();
@@ -44,7 +46,7 @@ export function Canvas({
         g.clearCanvas();
       };
 
-      const g = new Game(canvas, roomId, socket);
+      const g = new Game(canvas, roomId, socket, sendMessage);
       setGame(g);
 
       resizeCanvas();
@@ -55,7 +57,7 @@ export function Canvas({
         g.destroy();
       };
     }
-  }, [roomId, socket]); 
+  }, [roomId, socket, sendMessage]); 
 
   return (
     <div className="relative w-full h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden">
@@ -81,30 +83,52 @@ export function Canvas({
         game={game}
         strokeColor={strokeColor}
         setStrokeColor={setStrokeColor}
+        sendMessage={sendMessage}
       />
       
       {/* Room info indicator */}
       <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md border border-white/20 rounded-lg px-4 py-2 text-white text-sm pointer-events-none">
         Room: <span className="font-semibold text-blue-400">{roomId}</span>
       </div>
+
+      {/* Connection status indicator */}
+      <div className="absolute bottom-4 left-4 bg-black/40 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-white text-xs pointer-events-none flex items-center gap-2">
+        {socket && socket.readyState === WebSocket.OPEN ? (
+          <>
+            <Wifi className="w-4 h-4 text-green-400" />
+            <span className="text-green-400">Connected</span>
+          </>
+        ) : (
+          <>
+            <WifiOff className="w-4 h-4 text-red-400 animate-pulse" />
+            <span className="text-red-400">Disconnected</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function Topbar({ selectedTool, setSelectedTool, socket, roomId, game, strokeColor, setStrokeColor }: {
+function Topbar({ selectedTool, setSelectedTool, socket, roomId, game, strokeColor, setStrokeColor, sendMessage }: {
   selectedTool: Tool,
   setSelectedTool: (s: Tool) => void,
-  socket: WebSocket,
+  socket: WebSocket | null,
   roomId: string,
   game?: Game,
   strokeColor: string,
-  setStrokeColor: (c: string) => void
+  setStrokeColor: (c: string) => void,
+  sendMessage?: (message: string) => void
 }) {
   const handleClear = async () => {
     try {
       await cleanCanvas(roomId);
       game?.clearShapes();
-      socket.send(JSON.stringify({ type: "clear", roomId }));
+      const message = JSON.stringify({ type: "clear", roomId });
+      if (sendMessage) {
+        sendMessage(message);
+      } else if (socket) {
+        socket.send(message);
+      }
     } catch (error) {
       console.error("Failed to clear canvas:", error);
     }

@@ -39,14 +39,16 @@ export class Game {
     private previewX = 0;
     private previewY = 0;
 
-    socket: WebSocket;
+    socket: WebSocket | null;
+    private sendMessage?: (message: string) => void;
 
-    constructor(canvas: HTMLCanvasElement, roomId: string, socket: WebSocket) {
+    constructor(canvas: HTMLCanvasElement, roomId: string, socket: WebSocket | null, sendMessage?: (message: string) => void) {
         this.canvas = canvas;
         this.ctx = canvas.getContext("2d")!;
         this.existingShapes = [];
         this.roomId = roomId;
         this.socket = socket;
+        this.sendMessage = sendMessage;
         this.clicked = false;
         this.init();
         this.initHandlers();
@@ -89,11 +91,16 @@ export class Game {
             this.existingShapes = this.undoHistory.pop() || [];
             this.clearCanvas();
             // Send undo state to other users
-            this.socket.send(JSON.stringify({
+            const message = JSON.stringify({
                 type: "undo",
                 shapes: this.existingShapes,
                 roomId: this.roomId
-            }));
+            });
+            if (this.sendMessage) {
+                this.sendMessage(message);
+            } else if (this.socket) {
+                this.socket.send(message);
+            }
         }
     }
 
@@ -111,6 +118,10 @@ export class Game {
     }
 
     initHandlers() {
+        if (!this.socket) {
+            return;
+        }
+
         this.socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
 
@@ -275,13 +286,18 @@ export class Game {
         this.existingShapes.push(shape);
         this.clearCanvas();
 
-        this.socket.send(JSON.stringify({
+        const message = JSON.stringify({
             type: "chat",
             message: JSON.stringify({
                 shape
             }),
             roomId: this.roomId
-        }))
+        });
+        if (this.sendMessage) {
+            this.sendMessage(message);
+        } else if (this.socket) {
+            this.socket.send(message);
+        }
     }
     mouseMoveHandler = (e: MouseEvent) => {
         if (this.clicked) {
